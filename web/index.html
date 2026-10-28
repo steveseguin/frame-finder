@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#111714">
+  <title>Frame Finder · Live item recognition</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header><a class="brand" href="./"><span class="brand-icon">⌗</span> FRAME FINDER</a><span class="privacy"><span class="dot"></span> Recognition stays on this device</span></header>
+<main>
+  <div class="intro"><div><p class="eyebrow">LIVE VIDEO / LOCAL AI</p><h1>Point. Hold. Identify.</h1><p>Find out what’s in front of the camera, one frame at a time.</p></div><span class="edition">BROWSER DEMO <span>01</span></span></div>
+  <div class="workspace">
+    <section class="viewer-panel" aria-label="Video input">
+      <div class="panel-top"><span><span class="dot" id="live-dot"></span> <span id="source-name">CAMERA PREVIEW</span></span><span id="source-state">OFFLINE</span></div>
+      <div class="stage" id="stage">
+        <video id="video" autoplay muted playsinline hidden></video>
+        <img id="still" alt="Selected image" hidden>
+        <iframe id="vdo" title="VDO.Ninja stream" allow="autoplay; fullscreen" hidden></iframe>
+        <div class="empty" id="empty"><div class="focus-symbol">⌗</div><h2>Your next find starts here.</h2><p>Turn on your camera and hold an item<br>inside the focus area.</p><button class="primary" id="hero-start">Start camera <span>↗</span></button></div>
+        <div id="focus" hidden><span>HOLD AN ITEM HERE</span></div>
+        <div class="stage-caption" id="stage-caption">Camera is off · No microphone required</div>
+      </div>
+      <div class="transport"><button class="primary" id="start">Start camera</button><button id="pause" disabled>Pause analysis</button><button id="stop" disabled>Stop</button><a class="mobile-results" href="#recognition">View recognition ↓</a><span id="sample-count">0 frames analyzed</span></div>
+      <div class="settings">
+        <label>Video source<select id="source"><option value="camera">This device’s camera</option><option value="file">Image or video file</option><option value="vdo">VDO.Ninja stream</option><option value="hls">HLS / video URL</option></select></label>
+        <label id="camera-field">Camera<select id="camera"><option value="">Default / rear camera</option></select></label>
+        <label id="file-field" hidden>Choose a file<input id="file" type="file" accept="image/*,video/*"></label>
+        <label id="url-field" hidden>Stream URL<input id="url" type="url" placeholder="https://vdo.ninja/?view=your-stream"></label>
+        <label id="stream-field" hidden>VDO.Ninja stream ID<input id="stream-id" placeholder="Taken from ?view= when possible"></label>
+      </div>
+      <details><summary>Analysis settings</summary><div class="settings">
+        <label>Time between checks<select id="interval"><option value="500">0.5 seconds</option><option value="1000" selected>1 second</option><option value="2000">2 seconds</option><option value="5000">5 seconds</option></select></label>
+        <label>Minimum classifier score<input id="threshold" type="range" min="0.1" max="0.9" step="0.05" value="0.35"><span id="threshold-value">35%</span></label>
+        <label class="check"><input id="crop" type="checkbox" checked> Focus on the center square</label>
+      </div></details>
+    </section>
+    <aside>
+      <section class="result-panel" id="recognition" aria-label="Recognition results" tabindex="-1">
+        <div class="panel-top"><span>RECOGNITION</span><span class="tag" id="engine-tag">LOCAL</span></div>
+        <label>Recognition engine<select id="engine"><option value="mobilenet">Fast classifier · MobileNet</option><option value="nano">Chrome built-in AI · Gemini Nano</option></select></label>
+        <p class="engine-note" id="engine-note">Small image classifier. Best for common objects; try a mug, shoe, bottle, or keyboard.</p>
+        <details class="model-details">
+          <summary id="model-summary" title="14.04 MB model download · Apache-2.0 license · 1,000 ImageNet classes. Tap for details.">14.04 MB · 1,000 classes · Apache-2.0</summary>
+          <div class="model-info">
+            <dl><dt>Model</dt><dd id="model-name">MobileNet V2 1.0 / 224</dd><dt>Size</dt><dd id="model-size">14.04 MB (13.39 MiB), including weights and graph. Browser libraries and working memory are additional.</dd><dt>Coverage</dt><dd id="model-classes">1,000 ImageNet categories. No custom product catalog or exact SKU matching.</dd><dt>License</dt><dd id="model-license">Apache-2.0</dd></dl>
+            <a id="model-source" href="https://www.kaggle.com/models/google/mobilenet-v2/tfJs/100-224-classification/2" target="_blank" rel="noopener noreferrer">Model source & details ↗</a>
+          </div>
+        </details>
+        <div class="status" id="status" role="status" aria-live="polite">Ready when you are.</div>
+        <div class="result"><p class="eyebrow" id="result-kind">CURRENT ITEM</p><h2 id="item">Nothing identified yet</h2><p id="description">Hold one item still in good lighting.</p></div>
+        <div id="candidates"></div>
+        <div class="metrics"><div><span>INFERENCE</span><strong id="latency">—</strong></div><div><span>COMPUTE</span><strong id="backend">—</strong></div></div>
+        <div class="frame-row"><canvas id="sample" width="320" height="320" aria-label="Last frame analyzed"></canvas><div><span class="eyebrow">ANALYZED FRAME</span><p id="frame-note">A cropped preview will appear here.</p></div></div>
+      </section>
+      <section class="tip"><span>↗</span><p><strong>Give it a clear view.</strong><br>Fill the focus area with one item. Category guesses aren’t verified brands or product IDs.</p></section>
+    </aside>
+  </div>
+  <footer><span>Camera & files are processed locally. Remote streams contact their providers.</span><span>WEB · ANDROID · iOS</span></footer>
+</main>
+<script type="module" src="app.js"></script>
+</body>
+</html>

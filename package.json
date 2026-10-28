@@ -1,0 +1,12 @@
+{
+  "name": "frame-finder",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Local live-video item recognition demo and native mobile starters",
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs",
+    "download-models": "node download-assets.mjs"
+  },
+  "engines": { "node": ">=18" }
+}

@@ -1,0 +1,9 @@
+node_modules/
+.DS_Store
+native/android/.gradle/
+native/android/local.properties
+native/android/**/build/
+native/ios/**/xcuserdata/
+native/ios/DerivedData/
+*.zip
+*.apk
