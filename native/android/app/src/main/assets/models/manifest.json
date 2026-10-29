@@ -26,5 +26,26 @@
     "sha256": "11af3c560dfeed7737cb4c03c23bf52a8403020784192d4dea0b74862a12828d",
     "license": "Apache-2.0",
     "source": "https://storage.googleapis.com/mediapipe-models/image_embedder/mobilenet_v3_large/float32/1/mobilenet_v3_large.tflite"
+  },
+  {
+    "file": "efficientdet-lite0-int8.tflite",
+    "bytes": 4563519,
+    "sha256": "2e04c53bfeac0ac2a30c057c7e2a777594ce39baaac35a92f74fb1e8c4fc4e0b",
+    "license": "Apache-2.0",
+    "source": "https://storage.googleapis.com/download.tensorflow.org/models/tflite/task_library/object_detection/android/lite-model_efficientdet_lite0_detection_metadata_1.tflite"
+  },
+  {
+    "file": "efficientdet-lite2-int8.tflite",
+    "bytes": 7557887,
+    "sha256": "6fd32c84ab1eb0f7e7f3a7a20a20d7df1530daa8378728f7c79571096286bd52",
+    "license": "Apache-2.0",
+    "source": "https://storage.googleapis.com/download.tensorflow.org/models/tflite/task_library/object_detection/android/lite-model_efficientdet_lite2_detection_metadata_1.tflite"
+  },
+  {
+    "file": "ssd-mobilenet-v1-int8.tflite",
+    "bytes": 4185175,
+    "sha256": "cbdecd08b44c5dea3821f77c5468e2936ecfbf43cde0795a2729fdb43401e58b",
+    "license": "Apache-2.0",
+    "source": "https://storage.googleapis.com/download.tensorflow.org/models/tflite/task_library/object_detection/android/lite-model_ssd_mobilenet_v1_1_metadata_2.tflite"
   }
 ]

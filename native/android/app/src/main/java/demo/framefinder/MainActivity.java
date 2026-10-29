@@ -61,6 +61,28 @@ public final class MainActivity extends ComponentActivity {
     private Button toggle, describe, recheck, save;
     private EditText itemName;
     private LinearLayout referenceControls;
+    private LinearLayout detectionControls;
+    private Button reviewButton;
+    private android.widget.SeekBar detectionScore;
+    private TextView detectionSettings;
+    private volatile float detectionThreshold = .35f;
+    private volatile java.util.Set<String> reviewNames;
+    private TextView batteryInfo;
+    private android.widget.CheckBox batteryAdaptive;
+    private volatile long samplingInterval = 1000;
+    private int batteryPercent = -1;
+    private boolean powerConnected, batteryReceiverRegistered;
+    private final android.content.BroadcastReceiver batteryReceiver = new android.content.BroadcastReceiver() {
+        @Override public void onReceive(android.content.Context context, android.content.Intent intent) {
+            if (android.content.Intent.ACTION_BATTERY_CHANGED.equals(intent.getAction())) {
+                int level = intent.getIntExtra(android.os.BatteryManager.EXTRA_LEVEL, -1);
+                int scale = intent.getIntExtra(android.os.BatteryManager.EXTRA_SCALE, -1);
+                batteryPercent = level >= 0 && scale > 0 ? Math.min(100, Math.round(level * 100f / scale)) : -1;
+                powerConnected = intent.getIntExtra(android.os.BatteryManager.EXTRA_PLUGGED, 0) != 0;
+            }
+            refreshBattery();
+        }
+    };
     private ProcessCameraProvider cameraProvider;
     private volatile boolean active, destroyed;
     private volatile int generation, selected;
@@ -76,6 +98,9 @@ public final class MainActivity extends ComponentActivity {
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
         smallModel = new SmallModel(this);
+        android.content.SharedPreferences preferences = getSharedPreferences("detection", MODE_PRIVATE);
+        reviewNames = new java.util.HashSet<>(preferences.getStringSet("review", new java.util.HashSet<>(java.util.Arrays.asList("knife", "scissors"))));
+        detectionThreshold = Math.max(.1f, Math.min(.9f, preferences.getFloat("threshold", .35f)));
         LinearLayout layout = new LinearLayout(this);
         layout.setOrientation(LinearLayout.VERTICAL);
         layout.setBackgroundColor(Color.rgb(17, 23, 20));
@@ -87,11 +112,36 @@ public final class MainActivity extends ComponentActivity {
         });
         addText(layout, "FRAME FINDER", 13);
         addText(layout, "Point. Hold. Identify.", 27);
+        batteryInfo = addText(layout, "Reading battery…", 13);
+        batteryAdaptive = new android.widget.CheckBox(this);
+        batteryAdaptive.setText("Battery-aware sampling"); batteryAdaptive.setTextColor(Color.rgb(235, 242, 230));
+        batteryAdaptive.setChecked(preferences.getBoolean("adaptiveBattery", true)); layout.addView(batteryAdaptive);
+        batteryAdaptive.setOnCheckedChangeListener((button, checked) -> {
+            preferences.edit().putBoolean("adaptiveBattery", checked).apply(); refreshBattery();
+        });
         addText(layout, "Recognition model - stop the camera to change", 12);
         picker = new Spinner(this);
         ArrayAdapter<String> adapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, ModelChoice.NAMES);
         picker.setAdapter(adapter); picker.setMinimumHeight(dp(48)); layout.addView(picker);
         modelInfo = addText(layout, "", 13);
+        detectionControls = new LinearLayout(this); detectionControls.setOrientation(LinearLayout.VERTICAL);
+        detectionSettings = addText(detectionControls, "", 13);
+        reviewButton = new Button(this); reviewButton.setText("Choose review categories"); detectionControls.addView(reviewButton);
+        reviewButton.setOnClickListener(view -> chooseReviewCategories());
+        detectionScore = new android.widget.SeekBar(this); detectionScore.setMax(16);
+        detectionScore.setProgress(Math.round((detectionThreshold - .1f) / .05f));
+        detectionScore.setContentDescription("Detection score threshold"); detectionControls.addView(detectionScore);
+        detectionScore.setOnSeekBarChangeListener(new android.widget.SeekBar.OnSeekBarChangeListener() {
+            public void onProgressChanged(android.widget.SeekBar bar, int progress, boolean fromUser) {
+                if (!fromUser) return;
+                detectionThreshold = Math.min(.9f, .1f + progress * .05f);
+                getSharedPreferences("detection", MODE_PRIVATE).edit().putFloat("threshold", detectionThreshold).apply();
+                renderDetectionSettings(); clearDetectionResult();
+            }
+            public void onStartTrackingTouch(android.widget.SeekBar bar) {}
+            public void onStopTrackingTouch(android.widget.SeekBar bar) {}
+        });
+        layout.addView(detectionControls); renderDetectionSettings();
         systemStatus = addText(layout, "", 13);
         recheck = new Button(this); recheck.setText("Recheck system AI"); layout.addView(recheck);
         previewView = new PreviewView(this);
@@ -119,7 +169,7 @@ public final class MainActivity extends ComponentActivity {
         resourceDisk = addText(layout, "Reading installed model sizes…", 13);
         resourceRuntime = addText(layout, "", 14);
         resourceRuntime.setTextIsSelectable(true);
-        addText(layout, "RAM and CPU measure this app, including camera, UI and runtime caches. RAM change is relative to before the first check, not a model-only allocation. System service RAM/CPU and accelerator utilization are not visible here. 100% CPU means one busy core; multiple cores can exceed 100%. Memory is sampled about every 2 seconds during analysis.\n\nLatency includes model setup when needed, but excludes camera conversion, catalog matching and these resource samples. The first check is shown separately; restarting a warm model is not a cold-start benchmark. For cleaner model comparisons, relaunch the app between runs. Stopped cameras retain the last run's measurements.", 12);
+        addText(layout, "RAM and CPU measure this app, including camera, UI and runtime caches. RAM change is relative to before the first check, not a model-only allocation. System service RAM/CPU and accelerator utilization are not visible here. 100% CPU means one busy core; multiple cores can exceed 100%. Memory is sampled about every 2 seconds during analysis.\n\nLatency includes model setup when needed, but excludes camera conversion, catalog matching, drawing boxes and these resource samples. The first check is shown separately; restarting a warm model is not a cold-start benchmark. For cleaner model comparisons, relaunch the app between runs. Stopped cameras retain the last run's measurements.", 12);
         categoryToggle = new Button(this); layout.addView(categoryToggle);
         categoryFilter = new EditText(this); categoryFilter.setHint("Filter category names"); categoryFilter.setSingleLine(true); layout.addView(categoryFilter);
         categoryList = addText(layout, "", 13); categoryList.setTextIsSelectable(true);
@@ -153,6 +203,11 @@ public final class MainActivity extends ComponentActivity {
                 }).show();
         });
         selectModel(0);
+        android.content.IntentFilter batteryFilter = new android.content.IntentFilter(android.content.Intent.ACTION_BATTERY_CHANGED);
+        batteryFilter.addAction(android.os.PowerManager.ACTION_POWER_SAVE_MODE_CHANGED);
+        ContextCompat.registerReceiver(this, batteryReceiver, batteryFilter, ContextCompat.RECEIVER_NOT_EXPORTED);
+        batteryReceiverRegistered = true;
+        refreshBattery();
     }
 
     private int dp(int value) { return Math.round(value * getResources().getDisplayMetrics().density); }
@@ -164,10 +219,12 @@ public final class MainActivity extends ComponentActivity {
     private void controls() {
         previewView.setKeepScreenOn(active || starting);
         picker.setEnabled(!active && !starting && !busy.get());
-        toggle.setEnabled(!busy.get() || active);
+        toggle.setEnabled((!busy.get() || active) && (samplingInterval > 0 || active));
         toggle.setText(active || starting ? "Stop camera" : "Start camera");
         describe.setEnabled(active && systemReady && !busy.get() && !describeRequested.get());
         save.setEnabled(active && lastVector != null && catalog != null);
+        reviewButton.setEnabled(!active && !starting && !busy.get() && !categoryNames.isEmpty());
+        detectionScore.setEnabled(!active && !starting && !busy.get());
     }
     private void selectModel(int model) {
         if (active || starting || busy.get()) return;
@@ -182,6 +239,9 @@ public final class MainActivity extends ComponentActivity {
         recheck.setVisibility(nano ? View.VISIBLE : View.GONE);
         systemStatus.setVisibility(nano ? View.VISIBLE : View.GONE);
         referenceControls.setVisibility(ModelChoice.isEmbedding(model) ? View.VISIBLE : View.GONE);
+        detectionControls.setVisibility(ModelChoice.isDetector(model) ? View.VISIBLE : View.GONE);
+        sample.setLayoutParams(new LinearLayout.LayoutParams(ModelChoice.isDetector(model) ? -1 : dp(96), dp(ModelChoice.isDetector(model) ? 260 : 96)));
+        sample.setScaleType(ImageView.ScaleType.FIT_CENTER);
         item.setText("Nothing identified yet"); details.setText(""); timing.setText("");
         sample.setImageDrawable(null); if (shownFrame != null) shownFrame.recycle(); shownFrame = null;
         try { if (ModelChoice.isEmbedding(model)) catalog = new ItemCatalog(this, model); }
@@ -220,7 +280,7 @@ public final class MainActivity extends ComponentActivity {
                 runOnUiThread(() -> {
                     if (destroyed || selected != model) return;
                     resourceDisk.setText(disk); categoryNames = names;
-                    refreshCatalogDetails(); renderCategories();
+                    refreshCatalogDetails(); renderCategories(); controls();
                 });
             } catch (Exception error) {
                 runOnUiThread(() -> { if (!destroyed && selected == model) resourceDisk.setText("Model details unavailable: " + error.getMessage()); });
@@ -250,9 +310,48 @@ public final class MainActivity extends ComponentActivity {
         for (String name : categoryNames) if (name.toLowerCase(java.util.Locale.ROOT).contains(filter)) { text.append(name).append('\n'); shown++; }
         categoryList.setText(shown + " of " + categoryNames.size() + " " + kind + "\n\n" + text);
     }
+    private void renderDetectionSettings() {
+        String names = reviewNames.isEmpty() ? "none" : android.text.TextUtils.join(", ", new java.util.TreeSet<>(reviewNames));
+        detectionSettings.setText(String.format(java.util.Locale.US, "Review categories: %s\nDetection threshold: %.0f%%. Lower values show more candidates and false alarms. Stop the camera to change settings. All 80 categories are still detected.", names, detectionThreshold * 100));
+    }
+    private void chooseReviewCategories() {
+        if (!ModelChoice.isDetector(selected) || active || starting || busy.get()) return;
+        String[] names = categoryNames.toArray(new String[0]);
+        boolean[] checked = new boolean[names.length];
+        for (int i = 0; i < names.length; i++) checked[i] = reviewNames.contains(names[i]);
+        new AlertDialog.Builder(this).setTitle("Flag these categories for review")
+            .setMultiChoiceItems(names, checked, (dialog, which, value) -> checked[which] = value)
+            .setNegativeButton("Cancel", null).setNeutralButton("Clear all", (dialog, which) -> saveReviewCategories(new java.util.HashSet<>()))
+            .setPositiveButton("Apply", (dialog, which) -> {
+                java.util.Set<String> chosen = new java.util.HashSet<>();
+                for (int i = 0; i < names.length; i++) if (checked[i]) chosen.add(names[i]);
+                saveReviewCategories(chosen);
+            }).show();
+    }
+    private void saveReviewCategories(java.util.Set<String> chosen) {
+        reviewNames = chosen;
+        getSharedPreferences("detection", MODE_PRIVATE).edit().putStringSet("review", chosen).apply();
+        renderDetectionSettings(); clearDetectionResult();
+    }
+    private void clearDetectionResult() {
+        if (!ModelChoice.isDetector(selected)) return;
+        item.setText("Start camera to apply these settings"); details.setText(""); timing.setText("");
+        sample.setImageDrawable(null); if (shownFrame != null) shownFrame.recycle(); shownFrame = null;
+    }
+    private void refreshBattery() {
+        if (destroyed || batteryAdaptive == null) return;
+        android.os.PowerManager power = (android.os.PowerManager)getSystemService(POWER_SERVICE);
+        boolean saver = power != null && power.isPowerSaveMode();
+        samplingInterval = BatteryPolicy.interval(batteryAdaptive.isChecked(), batteryPercent, powerConnected, saver);
+        batteryInfo.setText(BatteryPolicy.description(batteryAdaptive.isChecked(), batteryPercent, powerConnected, saver));
+        if (samplingInterval == 0 && (active || starting)) {
+            stopCamera(); status.setText("Camera stopped to preserve the remaining battery. Connect power, then tap Start camera.");
+        }
+        if (toggle != null) controls();
+    }
 
     private void startCamera() {
-        if (destroyed || active || starting || busy.get()) return;
+        if (destroyed || active || starting || busy.get() || samplingInterval == 0) return;
         int request = ++generation;
         starting = true; lastFrame = 0; lastVector = null;
         resourceStats = new ResourceStats(); resourceRuntime.setText(resourceStats.summary());
@@ -272,7 +371,7 @@ public final class MainActivity extends ComponentActivity {
                 cameraProvider.unbindAll();
                 cameraProvider.bindToLifecycle(this, selector, preview, analysis);
                 active = true;
-                status.setText(selected == 5 ? "Tap Describe frame for a system AI description." : "Recognizing locally - center one item in the preview");
+                status.setText(selected == 5 ? "Tap Describe frame for a system AI description." : ModelChoice.isDetector(selected) ? "Detecting across the full frame - boxes appear below" : "Recognizing locally - center one item in the preview");
             } catch (Exception error) { status.setText("Camera failed: " + error.getMessage()); }
             starting = false; controls();
         }, ContextCompat.getMainExecutor(this));
@@ -281,7 +380,8 @@ public final class MainActivity extends ComponentActivity {
     private void analyze(ImageProxy proxy) {
         long now = SystemClock.elapsedRealtime();
         int model = selected;
-        if (!active || now - lastFrame < 1000 || (model == 5 && !describeRequested.get()) || !busy.compareAndSet(false, true)) { proxy.close(); return; }
+        long interval = samplingInterval;
+        if (!active || interval == 0 || now - lastFrame < interval || (model == 5 && !describeRequested.get()) || !busy.compareAndSet(false, true)) { proxy.close(); return; }
         int request = generation;
         lastFrame = now; describeRequested.set(false);
         Bitmap image;
@@ -290,7 +390,10 @@ public final class MainActivity extends ComponentActivity {
             Matrix rotation = new Matrix(); rotation.postRotate(proxy.getImageInfo().getRotationDegrees());
             Bitmap upright = Bitmap.createBitmap(raw, 0, 0, raw.getWidth(), raw.getHeight(), rotation, true);
             if (upright != raw) raw.recycle();
-            if (model == 0) {
+            if (ModelChoice.isDetector(model)) {
+                // Keep the full scene and a mutable copy for boxes on this exact analyzed frame.
+                image = upright.copy(Bitmap.Config.ARGB_8888, true); upright.recycle();
+            } else if (model == 0) {
                 // Preserve full-frame text and barcode scanning in the original ML Kit mode.
                 image = upright;
             } else {
@@ -315,9 +418,15 @@ public final class MainActivity extends ComponentActivity {
             if (model == 0) recognizer.recognize(InputImage.fromBitmap(image, 0), callback);
             else if (model == 5) system.recognize(image, callback);
             else {
-                SmallModel.Result result = smallModel.recognize(model, image);
+                SmallModel.Result result = smallModel.recognize(model, image, detectionThreshold);
                 long elapsed = SystemClock.elapsedRealtime() - start;
-                runOnUiThread(() -> finish(request, model, image, result.name, result.details, elapsed, result.vector, null, measurements, cpuStart));
+                if (ModelChoice.isDetector(model)) {
+                    java.util.Set<String> review = reviewNames;
+                    String name = DetectedObject.summary(result.objects, review);
+                    String text = DetectedObject.details(result.objects, review, detectionThreshold);
+                    DetectedObject.draw(image, result.objects, review);
+                    runOnUiThread(() -> finish(request, model, image, name, text, elapsed, null, null, measurements, cpuStart));
+                } else runOnUiThread(() -> finish(request, model, image, result.name, result.details, elapsed, result.vector, null, measurements, cpuStart));
             }
         } catch (Exception error) { callback.complete("No result", "", 0, error); }
     }
@@ -336,8 +445,8 @@ public final class MainActivity extends ComponentActivity {
                 lastVector = vector.clone(); vectorTime = SystemClock.elapsedRealtime();
             }
             item.setText(name); details.setText(text);
-            status.setText(model == 5 ? "Description ready. Tap Describe frame to sample again." : "Recognizing locally - estimates only");
-            timing.setText(elapsed + " ms - " + (model == 0 ? "ML Kit - full frame" : model == 5 ? "Android AICore - center crop" : "CPU - 2 threads - center crop"));
+            status.setText(model == 5 ? "Description ready. Tap Describe frame to sample again." : ModelChoice.isDetector(model) ? "Detecting locally - orange boxes mark review categories" : "Recognizing locally - estimates only");
+            timing.setText(elapsed + " ms - " + (model == 0 ? "ML Kit - full frame" : model == 5 ? "Android AICore - center crop" : ModelChoice.isDetector(model) ? "CPU - 2 threads - full frame" : "CPU - 2 threads - center crop"));
             measurements.record(elapsed, cpuMs);
             resourceRuntime.setText(measurements.summary());
             if (measurements.shouldSample()) analysisExecutor.execute(() -> {
@@ -355,6 +464,7 @@ public final class MainActivity extends ComponentActivity {
     @Override protected void onStop() { stopCamera(); super.onStop(); }
     @Override protected void onDestroy() {
         destroyed = true; availabilityRequest++;
+        if (batteryReceiverRegistered) { unregisterReceiver(batteryReceiver); batteryReceiverRegistered = false; }
         analysisExecutor.execute(() -> smallModel.close()); analysisExecutor.shutdown();
         if (!busy.get()) { recognizer.close(); if (system != null) system.close(); }
         sample.setImageDrawable(null); if (shownFrame != null) shownFrame.recycle();

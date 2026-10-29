@@ -22,10 +22,10 @@ public final class ModelDetails {
     }
     public static List<String> categories(Context context, int model) throws Exception {
         List<String> names = new ArrayList<>();
-        if (model > 2) return names;
-        String asset = model == 0 ? "models/mlkit-labels.txt" : "models/imagenet-labels.txt";
+        if (model > 2 && !ModelChoice.isDetector(model)) return names;
+        String asset = ModelChoice.isDetector(model) ? "models/coco-labels.txt" : model == 0 ? "models/mlkit-labels.txt" : "models/imagenet-labels.txt";
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(context.getAssets().open(asset), StandardCharsets.UTF_8))) {
-            String line; while ((line = reader.readLine()) != null) if (!line.trim().isEmpty()) names.add(line.trim());
+            String line; while ((line = reader.readLine()) != null) if (!line.trim().isEmpty() && !line.equals("???")) names.add(line.trim());
         }
         Collections.sort(names, String.CASE_INSENSITIVE_ORDER);
         return names;
@@ -35,7 +35,8 @@ public final class ModelDetails {
         ApplicationInfo app = context.getApplicationInfo();
         List<String> apks = new ArrayList<>(); apks.add(app.sourceDir);
         if (app.splitSourceDirs != null) Collections.addAll(apks, app.splitSourceDirs);
-        long[] packed = new long[6], unpacked = new long[6]; long total = 0;
+        int count = ModelChoice.NAMES.length;
+        long[] packed = new long[count], unpacked = new long[count]; long total = 0;
         for (String path : apks) {
             total += new File(path).length();
             try (ZipFile zip = new ZipFile(path)) {
@@ -44,13 +45,13 @@ public final class ModelDetails {
                     ZipEntry entry = entries.nextElement(); if (entry.isDirectory()) continue;
                     int model = -1;
                     if (entry.getName().startsWith("assets/mlkit")) model = 0;
-                    else for (int i = 1; i <= 4; i++) if (entry.getName().equals("assets/models/" + ModelChoice.FILES[i])) { model = i; break; }
+                    else for (int i = 1; i < count; i++) if (ModelChoice.FILES[i] != null && entry.getName().equals("assets/models/" + ModelChoice.FILES[i])) { model = i; break; }
                     if (model >= 0) { packed[model] += entry.getCompressedSize(); unpacked[model] += entry.getSize(); }
                 }
             }
         }
-        String[] descriptions = new String[6];
-        for (int i = 0; i < 6; i++) {
+        String[] descriptions = new String[count];
+        for (int i = 0; i < count; i++) {
             String selected = i == 5 ? "System model weights added to app: 0 MB\nExisting Android model storage is excluded."
                 : String.format(Locale.US, "%s in APK: %.2f MB\nUncompressed selected assets: %.2f MB",
                     i == 0 ? "ML Kit model assets (labels + OCR + barcodes)" : "Selected model weights", packed[i] / 1e6, unpacked[i] / 1e6);

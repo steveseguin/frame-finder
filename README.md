@@ -50,8 +50,10 @@ Camera access requires `localhost` or HTTPS. The supplied server binds only to t
 | Platform | Open | Recognition |
 | --- | --- | --- |
 | iPhone | [Xcode project](native/ios/FrameFinder.xcodeproj) · [setup](native/ios/README.md) | Apple's built-in Vision classification, text recognition, barcodes |
-| Android | [Android Studio project](native/android) · [setup](native/android/README.md) | Small classifiers, saved-item photo matching, ML Kit text/barcodes, and supported system Gemini Nano |
+| Android | [Download APK](https://github.com/steveseguin/frame-finder/releases/latest) · [setup](native/android/README.md) | Three object detectors with review flags, small classifiers, saved-item matching, ML Kit and supported system Gemini Nano |
 
 Both native apps use the device camera and expose a separate frame recognizer for later WebRTC/HLS integration. They use platform-specific models, so their labels and scores differ from the browser. See [stream integration and model choices](INTEGRATION.md).
+
+The Android app displays model sizes, licenses, searchable categories and measured resource usage. Battery-aware sampling slows analysis on low battery and stops capture at a critical level. See the [model comparison and iOS options](MODELS.md) for included models and Apple system/model integration choices.
 
 This demo identifies categories and visible attributes. For exact inventory products, compare against catalog photos or look up a recognized barcode/model number; don't turn a category guess into a verified listing.
