@@ -1,0 +1,30 @@
+[
+  {
+    "file": "efficientnet-lite0-int8.tflite",
+    "bytes": 5434517,
+    "sha256": "bc2ffe19c1118de0c0c2a9088992da5589722656e0fba81421385300a4a34b16",
+    "license": "Apache-2.0",
+    "source": "https://storage.googleapis.com/mediapipe-models/image_classifier/efficientnet_lite0/int8/1/efficientnet_lite0.tflite"
+  },
+  {
+    "file": "efficientnet-lite2-int8.tflite",
+    "bytes": 7165461,
+    "sha256": "7fc3a7dbc1cd2833b162a54577afb47ab531d9c4b799ef11d90a4c56fe4ed5ad",
+    "license": "Apache-2.0",
+    "source": "https://storage.googleapis.com/mediapipe-models/image_classifier/efficientnet_lite2/int8/1/efficientnet_lite2.tflite"
+  },
+  {
+    "file": "mobilenet-v3-small-embedding.tflite",
+    "bytes": 4117670,
+    "sha256": "bbbb4c51a55a53905af1daec995ca1aae355046f8839bb8c9f5ce9271394bc40",
+    "license": "Apache-2.0",
+    "source": "https://storage.googleapis.com/mediapipe-models/image_embedder/mobilenet_v3_small/float32/1/mobilenet_v3_small.tflite"
+  },
+  {
+    "file": "mobilenet-v3-large-embedding.tflite",
+    "bytes": 10889458,
+    "sha256": "11af3c560dfeed7737cb4c03c23bf52a8403020784192d4dea0b74862a12828d",
+    "license": "Apache-2.0",
+    "source": "https://storage.googleapis.com/mediapipe-models/image_embedder/mobilenet_v3_large/float32/1/mobilenet_v3_large.tflite"
+  }
+]

@@ -50,7 +50,7 @@ Camera access requires `localhost` or HTTPS. The supplied server binds only to t
 | Platform | Open | Recognition |
 | --- | --- | --- |
 | iPhone | [Xcode project](native/ios/FrameFinder.xcodeproj) · [setup](native/ios/README.md) | Apple's built-in Vision classification, text recognition, barcodes |
-| Android | [Android Studio project](native/android) · [setup](native/android/README.md) | CameraX and bundled ML Kit classification, text recognition, barcodes |
+| Android | [Android Studio project](native/android) · [setup](native/android/README.md) | Small classifiers, saved-item photo matching, ML Kit text/barcodes, and supported system Gemini Nano |
 
 Both native apps use the device camera and expose a separate frame recognizer for later WebRTC/HLS integration. They use platform-specific models, so their labels and scores differ from the browser. See [stream integration and model choices](INTEGRATION.md).
 

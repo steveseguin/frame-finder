@@ -39,7 +39,7 @@ public final class FrameRecognizer implements AutoCloseable {
                 return;
             }
             List<ImageLabel> found = labels.getResult();
-            found.sort((a, b) -> Float.compare(b.getConfidence(), a.getConfidence()));
+            java.util.Collections.sort(found, (a, b) -> Float.compare(b.getConfidence(), a.getConfidence()));
             String item = !found.isEmpty() && found.get(0).getConfidence() >= 0.35f ? found.get(0).getText() : "No clear match";
             StringBuilder details = new StringBuilder();
             for (int i = 0; i < Math.min(3, found.size()); i++) {

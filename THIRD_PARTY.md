@@ -13,3 +13,5 @@ The optional `npm run download-models` command saves pinned browser libraries, t
 The Android Gradle files pin AndroidX and Google ML Kit packages; Gradle resolves their transitive dependencies from Google's Maven repository and Maven Central. Preserve their licenses and applicable SDK terms when distributing an app. Apple Vision and other Apple SDK frameworks are supplied by the operating system and Xcode.
 
 Chrome manages its own Gemini Nano model. The demo does not redistribute it. VDO.Ninja is embedded as an optional remote viewer, not bundled in this folder.
+
+Android includes EfficientNet-Lite0/Lite2 int8 classifiers and MobileNet V3 Small/Large float32 image embedders from Google's MediaPipe model collection. Each model's embedded metadata declares Apache-2.0; the license, download URLs, byte sizes and SHA-256 hashes are included in `native/android/app/src/main/assets/models/`. TensorFlow Lite 2.17.0 uses Apache-2.0. The optional system AI build uses ML Kit GenAI Image Description 1.0.0-beta1 under [ML Kit GenAI terms](https://developers.google.com/ml-kit/terms); Android supplies the Gemini Nano model separately.
