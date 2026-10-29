@@ -47,6 +47,12 @@ public final class ItemCatalog {
         return normalize(result);
     }
     public int sampleCount() { return samples.length(); }
+    public long storageBytes() { return file.getBaseFile().length(); }
+    public List<String> names() throws Exception {
+        java.util.Set<String> unique = new java.util.TreeSet<>();
+        for (int i = 0; i < samples.length(); i++) unique.add(samples.getJSONObject(i).getString("name"));
+        return new ArrayList<>(unique);
+    }
     public void save(String name, float[] value) throws Exception {
         name = name.trim();
         if (name.isEmpty() || name.length() > 80) throw new IllegalArgumentException("Enter an item name, up to 80 characters");

@@ -8,6 +8,8 @@ import android.graphics.Color;
 import android.graphics.Matrix;
 import android.os.Bundle;
 import android.os.SystemClock;
+import android.text.Editable;
+import android.text.TextWatcher;
 import android.view.View;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
@@ -48,6 +50,13 @@ public final class MainActivity extends ComponentActivity {
     private ImageView sample;
     private Bitmap shownFrame;
     private TextView status, item, details, timing, modelInfo, systemStatus;
+    private TextView resourceDisk, resourceRuntime, resourceBackend, categoryList;
+    private Button categoryToggle;
+    private EditText categoryFilter;
+    private java.util.List<String> categoryNames = new java.util.ArrayList<>();
+    private volatile String[] diskDescriptions;
+    private boolean categoriesExpanded;
+    private volatile ResourceStats resourceStats = new ResourceStats();
     private Spinner picker;
     private Button toggle, describe, recheck, save;
     private EditText itemName;
@@ -105,6 +114,21 @@ public final class MainActivity extends ComponentActivity {
         Button clear = new Button(this); clear.setText("Clear this model's references"); referenceControls.addView(clear);
         layout.addView(referenceControls);
         addText(layout, "Recognition runs on this device. Categories, descriptions and similarity matches are estimates, not verified product identities.", 13);
+        addText(layout, "Selected model resources", 20);
+        resourceBackend = addText(layout, "", 13);
+        resourceDisk = addText(layout, "Reading installed model sizes…", 13);
+        resourceRuntime = addText(layout, "", 14);
+        resourceRuntime.setTextIsSelectable(true);
+        addText(layout, "RAM and CPU measure this app, including camera, UI and runtime caches. RAM change is relative to before the first check, not a model-only allocation. System service RAM/CPU and accelerator utilization are not visible here. 100% CPU means one busy core; multiple cores can exceed 100%. Memory is sampled about every 2 seconds during analysis.\n\nLatency includes model setup when needed, but excludes camera conversion, catalog matching and these resource samples. The first check is shown separately; restarting a warm model is not a cold-start benchmark. For cleaner model comparisons, relaunch the app between runs. Stopped cameras retain the last run's measurements.", 12);
+        categoryToggle = new Button(this); layout.addView(categoryToggle);
+        categoryFilter = new EditText(this); categoryFilter.setHint("Filter category names"); categoryFilter.setSingleLine(true); layout.addView(categoryFilter);
+        categoryList = addText(layout, "", 13); categoryList.setTextIsSelectable(true);
+        categoryToggle.setOnClickListener(view -> { categoriesExpanded = !categoriesExpanded; renderCategories(); });
+        categoryFilter.addTextChangedListener(new TextWatcher() {
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            public void onTextChanged(CharSequence s, int start, int before, int count) { renderCategories(); }
+            public void afterTextChanged(Editable value) {}
+        });
         ScrollView scroll = new ScrollView(this); scroll.setFillViewport(true); scroll.addView(layout); setContentView(scroll);
         picker.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             public void onItemSelected(AdapterView<?> parent, View view, int position, long id) { selectModel(position); }
@@ -124,7 +148,7 @@ public final class MainActivity extends ComponentActivity {
             new AlertDialog.Builder(this).setTitle("Clear saved reference views?")
                 .setMessage("This clears this embedding model's item names and reference vectors on this phone.")
                 .setNegativeButton("Cancel", null).setPositiveButton("Clear", (dialog, which) -> {
-                    try { current.clear(); item.setText("Teach it your first item"); details.setText(""); status.setText("Reference collection cleared."); }
+                    try { current.clear(); item.setText("Teach it your first item"); details.setText(""); status.setText("Reference collection cleared."); refreshCatalogDetails(); }
                     catch (Exception e) { status.setText(e.getMessage()); }
                 }).show();
         });
@@ -148,6 +172,9 @@ public final class MainActivity extends ComponentActivity {
     private void selectModel(int model) {
         if (active || starting || busy.get()) return;
         selected = model; generation++; availabilityRequest++;
+        resourceStats = new ResourceStats(); resourceRuntime.setText(resourceStats.summary());
+        resourceBackend.setText(ModelDetails.backend(model));
+        categoriesExpanded = false; categoryNames.clear(); categoryFilter.setText(""); renderCategories();
         lastVector = null; catalog = null;
         modelInfo.setText(ModelChoice.INFO[model]);
         boolean nano = model == 5;
@@ -159,6 +186,7 @@ public final class MainActivity extends ComponentActivity {
         sample.setImageDrawable(null); if (shownFrame != null) shownFrame.recycle(); shownFrame = null;
         try { if (ModelChoice.isEmbedding(model)) catalog = new ItemCatalog(this, model); }
         catch (Exception e) { status.setText("Could not load references: " + e.getMessage()); }
+        loadModelDetails(model);
         if (nano) checkSystem();
         controls();
     }
@@ -178,14 +206,56 @@ public final class MainActivity extends ComponentActivity {
         if (catalog == null || lastVector == null || !active || SystemClock.elapsedRealtime() - vectorTime > 3000) {
             status.setText("Wait for a fresh analyzed frame, then save again."); return;
         }
-        try { catalog.save(itemName.getText().toString(), lastVector); status.setText("Saved reference view - " + catalog.sampleCount() + " views in this collection"); }
+        try { catalog.save(itemName.getText().toString(), lastVector); status.setText("Saved reference view - " + catalog.sampleCount() + " views in this collection"); refreshCatalogDetails(); }
         catch (Exception e) { status.setText(e.getMessage()); }
+    }
+
+    private void loadModelDetails(int model) {
+        resourceDisk.setText("Reading installed model sizes…");
+        analysisExecutor.execute(() -> {
+            try {
+                if (diskDescriptions == null) diskDescriptions = ModelDetails.disk(this);
+                String disk = diskDescriptions[model];
+                java.util.List<String> names = ModelDetails.categories(this, model);
+                runOnUiThread(() -> {
+                    if (destroyed || selected != model) return;
+                    resourceDisk.setText(disk); categoryNames = names;
+                    refreshCatalogDetails(); renderCategories();
+                });
+            } catch (Exception error) {
+                runOnUiThread(() -> { if (!destroyed && selected == model) resourceDisk.setText("Model details unavailable: " + error.getMessage()); });
+            }
+        });
+    }
+    private void refreshCatalogDetails() {
+        if (catalog != null) {
+            try {
+                categoryNames = catalog.names();
+                if (diskDescriptions != null) resourceDisk.setText(diskDescriptions[selected] + "\nSaved reference data: " + catalog.storageBytes() + " bytes (private app storage).");
+            } catch (Exception e) { status.setText("Could not read saved item names: " + e.getMessage()); }
+        }
+        renderCategories();
+    }
+    private void renderCategories() {
+        if (categoryToggle == null) return;
+        boolean hasNames = !categoryNames.isEmpty();
+        String kind = ModelChoice.isEmbedding(selected) ? "saved item names" : "categories";
+        categoryToggle.setText(selected == 5 ? "Open-ended descriptions · no fixed categories" : (categoriesExpanded ? "Hide " : "Show ") + categoryNames.size() + " " + kind);
+        categoryToggle.setEnabled(hasNames);
+        categoryFilter.setVisibility(categoriesExpanded && hasNames ? View.VISIBLE : View.GONE);
+        categoryList.setVisibility(categoriesExpanded && hasNames ? View.VISIBLE : View.GONE);
+        if (!categoriesExpanded || !hasNames) { categoryList.setText(""); return; }
+        String filter = categoryFilter.getText().toString().trim().toLowerCase(java.util.Locale.ROOT);
+        StringBuilder text = new StringBuilder(); int shown = 0;
+        for (String name : categoryNames) if (name.toLowerCase(java.util.Locale.ROOT).contains(filter)) { text.append(name).append('\n'); shown++; }
+        categoryList.setText(shown + " of " + categoryNames.size() + " " + kind + "\n\n" + text);
     }
 
     private void startCamera() {
         if (destroyed || active || starting || busy.get()) return;
         int request = ++generation;
         starting = true; lastFrame = 0; lastVector = null;
+        resourceStats = new ResourceStats(); resourceRuntime.setText(resourceStats.summary());
         controls(); status.setText("Opening camera...");
         ListenableFuture<ProcessCameraProvider> future = ProcessCameraProvider.getInstance(this);
         future.addListener(() -> {
@@ -236,19 +306,23 @@ public final class MainActivity extends ComponentActivity {
             return;
         } finally { proxy.close(); }
         runOnUiThread(this::controls);
+        ResourceStats measurements = resourceStats;
+        measurements.begin();
+        long cpuStart = android.os.Process.getElapsedCpuTime();
         long start = SystemClock.elapsedRealtime();
-        FrameRecognizer.Callback callback = (name, text, elapsed, error) -> runOnUiThread(() -> finish(request, model, image, name, text, elapsed, null, error));
+        FrameRecognizer.Callback callback = (name, text, elapsed, error) -> runOnUiThread(() -> finish(request, model, image, name, text, elapsed, null, error, measurements, cpuStart));
         try {
             if (model == 0) recognizer.recognize(InputImage.fromBitmap(image, 0), callback);
             else if (model == 5) system.recognize(image, callback);
             else {
                 SmallModel.Result result = smallModel.recognize(model, image);
                 long elapsed = SystemClock.elapsedRealtime() - start;
-                runOnUiThread(() -> finish(request, model, image, result.name, result.details, elapsed, result.vector, null));
+                runOnUiThread(() -> finish(request, model, image, result.name, result.details, elapsed, result.vector, null, measurements, cpuStart));
             }
         } catch (Exception error) { callback.complete("No result", "", 0, error); }
     }
-    private void finish(int request, int model, Bitmap image, String name, String text, long elapsed, float[] vector, Exception error) {
+    private void finish(int request, int model, Bitmap image, String name, String text, long elapsed, float[] vector, Exception error, ResourceStats measurements, long cpuStart) {
+        long cpuMs = android.os.Process.getElapsedCpuTime() - cpuStart;
         busy.set(false);
         if (destroyed) { image.recycle(); recognizer.close(); if (system != null) system.close(); return; }
         if (!active || request != generation) { image.recycle(); controls(); return; }
@@ -264,6 +338,12 @@ public final class MainActivity extends ComponentActivity {
             item.setText(name); details.setText(text);
             status.setText(model == 5 ? "Description ready. Tap Describe frame to sample again." : "Recognizing locally - estimates only");
             timing.setText(elapsed + " ms - " + (model == 0 ? "ML Kit - full frame" : model == 5 ? "Android AICore - center crop" : "CPU - 2 threads - center crop"));
+            measurements.record(elapsed, cpuMs);
+            resourceRuntime.setText(measurements.summary());
+            if (measurements.shouldSample()) analysisExecutor.execute(() -> {
+                measurements.sample();
+                runOnUiThread(() -> { if (!destroyed && resourceStats == measurements) resourceRuntime.setText(measurements.summary()); });
+            });
         } catch (Exception e) { status.setText("Recognition failed: " + e.getMessage()); item.setText("No current result"); details.setText(""); timing.setText(""); }
         controls();
     }

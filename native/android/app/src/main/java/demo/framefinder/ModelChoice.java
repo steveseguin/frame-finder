@@ -12,7 +12,7 @@ public final class ModelChoice {
         "7.17 MB · Apache-2.0 · 1,000 ImageNet classes · int8 · CPU, 2 threads. More compute than Lite0; compare results on your items.",
         "4.12 MB · Apache-2.0 · 1,024-value image embeddings · CPU, 2 threads. Classes are the item names you save. Photo matching only, not text prompts.",
         "10.89 MB · Apache-2.0 · 1,280-value image embeddings · CPU, 2 threads. Classes are the item names you save. Separate reference collection from Small.",
-        "Android AICore / Gemini Nano · Google terms · open-ended descriptions, no fixed class count. Model size varies and can exceed 50 MB. Uses the installed system model; this app does not start model downloads. Availability is checked on this phone."};
+        "0 MB added system model weights · Android AICore / Gemini Nano · Google terms · open-ended descriptions, no fixed class count. Existing Android model storage is excluded. Availability is checked on this phone; this app does not start model downloads."};
     public static boolean isEmbedding(int model) { return model == 3 || model == 4; }
     private ModelChoice() {}
 }

@@ -15,9 +15,13 @@ The app uses the rear camera, or the front camera when no rear camera exists. It
 | EfficientNet-Lite2 int8 | 7.17 MB | 1,000 ImageNet classes | Apache-2.0 |
 | MobileNet V3 Small | 4.12 MB | Your saved item names; 1,024-value image embeddings | Apache-2.0 |
 | MobileNet V3 Large | 10.89 MB | Your saved item names; 1,280-value image embeddings | Apache-2.0 |
-| System Gemini Nano | Android-managed; varies and can exceed 50 MB | Open-ended image descriptions | Google GenAI terms |
+| System Gemini Nano | 0 MB added model weights; Android owns the existing model | Open-ended image descriptions | Google GenAI terms |
 
 Sizes use decimal MB and exclude runtime libraries and working memory. All four added small models are bundled for offline use, with hashes and source URLs in [the model manifest](app/src/main/assets/models/manifest.json). The small models run on CPU with two inference threads. ML Kit and AICore manage their own compute.
+
+Scroll to **Selected model resources** for measured RAM, CPU and latency while the camera runs. It shows first-check latency separately from the average of later checks, app RAM (PSS), the RAM change since before the first check, and app CPU as a percentage of one core. These are app-wide observations, including the camera and runtime caches; AICore's separate service memory, CPU and accelerator utilization are not exposed. Relaunch between models for cleaner comparisons. The displayed backend identifies the CPU path for the four small models and reports SDK-managed compute for ML Kit/AICore without assuming GPU or TPU use.
+
+Disk figures come from the installed APK: selected model assets inside the ZIP, their uncompressed size, and the total APK size. Shared libraries and packaging overhead are not assigned to individual models. System-owned weights count as 0 MB added to the app; saved item references are counted separately. All bundled models are already present, so changing models adds no download. At the bottom, expand and filter the **447 ML Kit labels**, **1,000 ImageNet categories**, or your **saved item names**. System descriptions have no fixed category list.
 
 **My items:** Choose either MobileNet embedding mode. Start the camera, enter an item name, and tap **Save reference view** while that item is visible in the analyzed preview. Save 3–5 angles with the same name. Repeat for other items. Each model keeps its own collection, up to 200 reference views. Only vectors and names are saved locally, not photographs. A match requires similarity of at least 0.80 and a lead of 0.05 over another item name. Similarity is not a confidence percentage; use distinct backgrounds and several reference angles to compare performance on your items.
 
